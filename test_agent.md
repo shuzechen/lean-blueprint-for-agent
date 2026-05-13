@@ -1,0 +1,3 @@
+I want to prove Noisy-channel coding theorem in Lean. You can find the proof in natural language here: https://en.wikipedia.org/wiki/Noisy-channel_coding_theorem. This is a complex proof. 
+
+Your job is to use the tool at https://github.com/shuzechen/lean-blueprint-for-agent to generate a blueprint for the proof blue-print. You need to figure out what's the definitions you need as well as what lemmas/sub-theorems you need. Create all definitions/lemmas/sub-theorems in both Lean and Latex. Then I will review your plan to check you formalization of the definitions/lemmas/sub-theorems.
