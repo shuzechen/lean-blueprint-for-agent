@@ -155,7 +155,29 @@ GITHUB_ISSUE_TPL = Template("""
 
 LEAN_LINKS_TPL = Template("""
   {% if thm.userdata['leandecls'] -%}
-  <span class="lean_link">Lean</span>
+  <button class="modal lean lean_link">Lean</button>
+  <div class="modal-container">
+    <div class="modal-content">
+      <header>
+        <h1>Lean source</h1>
+        <button class="closebtn">&times;</button>
+      </header>
+      {% for name, imports, body in thm.userdata.lean_sources %}
+      <div class="lean_source_block">
+        <div class="lean_source_name">{{ name | e }}</div>
+        <pre class="lean_source"><code>{% if imports %}{% for imp in imports %}import {{ imp | e }}
+{% endfor %}
+{% endif %}{{ body | e }}</code></pre>
+      </div>
+      {% endfor %}
+      {% for name in thm.userdata.lean_sources_missing %}
+      <div class="lean_source_block">
+        <div class="lean_source_name">{{ name | e }}</div>
+        <p class="lean_source_missing">(no source supplied)</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
   {%- endif -%}
 """)
 
