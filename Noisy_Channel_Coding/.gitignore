@@ -1,0 +1,10 @@
+.lake/
+build/
+.cache/
+lake-packages/
+blueprint/web/
+blueprint/print/
+blueprint/*.aux
+blueprint/*.log
+blueprint/*.out
+blueprint/*.toc

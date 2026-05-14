@@ -7,3 +7,8 @@ __pycache__
 .python-version
 build/
 dist/
+.DS_Store
+.lake/
+*.olean
+package/
+*.egg-info/
