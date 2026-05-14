@@ -11,6 +11,7 @@ Options:
 
 You can also add options that will be passed to the dependency graph package.
 """
+import json
 import string
 from pathlib import Path
 
@@ -127,12 +128,21 @@ CHECKMARK_TPL = Template("""
 LEAN_DECLS_TPL = Template("""
     {% if obj.userdata.leandecls %}
     <button class="modal lean">L∃∀N</button>
-    {% call modal('Lean declarations') %}
-        <ul class="uses">
-          {% for lean, url in obj.userdata.lean_urls %}
-          <li><a href="{{ url }}" class="lean_decl">{{ lean }}</a></li>
-          {% endfor %}
-        </ul>
+    {% call modal('Lean source') %}
+        {% for name, imports, body in obj.userdata.lean_sources %}
+        <div class="lean_source_block">
+          <div class="lean_source_name">{{ name | e }}</div>
+          <pre class="lean_source"><code>{% if imports %}{% for imp in imports %}import {{ imp | e }}
+{% endfor %}
+{% endif %}{{ body | e }}</code></pre>
+        </div>
+        {% endfor %}
+        {% for name in obj.userdata.lean_sources_missing %}
+        <div class="lean_source_block">
+          <div class="lean_source_name">{{ name | e }}</div>
+          <p class="lean_source_missing">(no source supplied)</p>
+        </div>
+        {% endfor %}
     {% endcall %}
     {% endif %}
 """)
@@ -144,20 +154,9 @@ GITHUB_ISSUE_TPL = Template("""
 """)
 
 LEAN_LINKS_TPL = Template("""
-  {% if thm.userdata['lean_urls'] -%}
-    {%- if thm.userdata['lean_urls']|length > 1 -%}
-  <div class="tooltip">
-      <span class="lean_link">Lean</span>
-      <ul class="tooltip_list">
-        {% for name, url in thm.userdata['lean_urls'] %}
-           <li><a href="{{ url }}" class="lean_decl">{{ name }}</a></li>
-        {% endfor %}
-      </ul>
-  </div>
-    {%- else -%}
-    <a class="lean_link lean_decl" href="{{ thm.userdata['lean_urls'][0][1] }}">Lean</a>
-    {%- endif -%}
-    {%- endif -%}
+  {% if thm.userdata['leandecls'] -%}
+  <span class="lean_link">Lean</span>
+  {%- endif -%}
 """)
 
 GITHUB_LINK_TPL = Template("""
@@ -195,24 +194,54 @@ def ProcessOptions(options, document):
 
     def make_lean_data() -> None:
         """
-        Build url and formalization status for nodes in the dependency graphs.
-        Also create the file lean_decls of all Lean names referred to in the blueprint.
+        Populate per-node formalization status and embed Lean source from the
+        blueprint/lean_sources.json sidecar (written by the agent / MCP).
+
+        Also create the file lean_decls of all Lean names referred to in the
+        blueprint (legacy artifact; harmless if unused).
         """
 
-        project_dochome = document.userdata.get('project_dochome',
-                                                'https://leanprover-community.github.io/mathlib4_docs')
+        # Load the optional sidecar that maps name -> {imports, body}.
+        # The sidecar lives next to lean_decls, in blueprint/.
+        sources_path = Path(document.userdata['working-dir']).parent/"lean_sources.json"
+        if sources_path.exists():
+            try:
+                sources_map = json.loads(sources_path.read_text(encoding='utf-8'))
+            except (OSError, ValueError) as e:
+                log.warning(f'Could not read {sources_path}: {e}')
+                sources_map = {}
+        else:
+            sources_map = {}
+
+        def _entry_for(name: str):
+            entry = sources_map.get(name)
+            if not isinstance(entry, dict):
+                return None
+            imports = entry.get('imports') or []
+            if not isinstance(imports, list):
+                imports = []
+            body = entry.get('body') or entry.get('source') or ''
+            return [str(imp) for imp in imports], str(body)
 
         for graph in document.userdata['dep_graph']['graphs'].values():
             nodes = graph.nodes
             for node in nodes:
                 leandecls = node.userdata.get('leandecls', [])
-                lean_urls = []
+                lean_sources = []
+                lean_sources_missing = []
                 for leandecl in leandecls:
-                    lean_urls.append(
-                        (leandecl,
-                         f'{project_dochome}/find/#doc/{leandecl}'))
+                    found = _entry_for(leandecl)
+                    if found is None:
+                        lean_sources_missing.append(leandecl)
+                    else:
+                        imports, body = found
+                        lean_sources.append((leandecl, imports, body))
 
-                node.userdata['lean_urls'] = lean_urls
+                node.userdata['lean_sources'] = lean_sources
+                node.userdata['lean_sources_missing'] = lean_sources_missing
+                # Keep lean_urls as empty list for back-compat with any template
+                # still referencing it; doc-gen URLs are no longer constructed.
+                node.userdata['lean_urls'] = []
 
                 used = node.userdata.get('uses', [])
                 node.userdata['can_state'] = all(thm.userdata.get('leanok')

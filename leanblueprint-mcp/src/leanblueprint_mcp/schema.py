@@ -23,15 +23,14 @@ class ItemStatus(str, Enum):
 
 
 class LeanCode(BaseModel):
-    module: Optional[str] = Field(
-        None,
-        description="Lean module path, e.g. 'MyProject.Basic'. Defaults to derived from chapter name.",
-    )
-    decl: str = Field(
+    file: str = Field(
         ...,
         description=(
-            "Full Lean 4 declaration: keyword, name, type signature, and proof. "
-            "E.g. 'theorem add_comm (a b : Nat) : a + b = b + a := by\\n  induction a ...'"
+            "Path to the Lean source file for this blueprint item, relative to "
+            "the project directory the MCP renders into. One blueprint item "
+            "maps to one Lean file; the MCP reads the file at render time and "
+            "embeds its imports + body in the L∃∀N modal. Example: "
+            "'Definitions/Def_DMC.lean'."
         ),
     )
 
@@ -42,10 +41,6 @@ class BlueprintItem(BaseModel):
     name: Optional[str] = Field(None, description="Display title")
     statement: str = Field(..., description="Statement in LaTeX math, e.g. '$a+b=b+a$'")
     uses: Optional[list[str]] = Field(None, description="IDs of items this depends on")
-    lean_decls: Optional[list[str]] = Field(
-        None,
-        description="Lean declaration names. Auto-derived from lean.decl when generate_lean=true.",
-    )
     status: ItemStatus = Field(
         ...,
         description="Formalization status: stated=formalized, not_ready=todo, mathlib=in Mathlib",
@@ -54,7 +49,10 @@ class BlueprintItem(BaseModel):
     discussion: Optional[int] = Field(None, description="GitHub issue number for discussion")
     lean: Optional[LeanCode] = Field(
         None,
-        description="Lean 4 source code for this item. When provided, generates .lean files.",
+        description=(
+            "Reference to the Lean source file for this item. When provided, "
+            "the file is read and its contents are shown in the L∃∀N modal."
+        ),
     )
 
 
@@ -68,17 +66,4 @@ class BlueprintInput(BaseModel):
     author: Optional[str] = Field(None, description="Author name")
     home: Optional[str] = Field(None, description="Project website URL")
     github: Optional[str] = Field(None, description="GitHub repository URL")
-    dochome: Optional[str] = Field(
-        None,
-        description="API documentation base URL",
-    )
-    format: str = Field(default="html", description="Output format: 'html' or 'pdf'")
-    generate_lean: bool = Field(
-        default=False,
-        description="Also generate Lean 4 .lean source files from lean.decl fields",
-    )
-    lean_build: bool = Field(
-        default=False,
-        description="Run 'lake build' after generating Lean files",
-    )
     chapters: list[Chapter] = Field(..., description="Theorem chapters")

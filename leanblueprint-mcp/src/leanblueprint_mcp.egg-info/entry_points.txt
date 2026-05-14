@@ -1,2 +1,2 @@
 [console_scripts]
-leanblueprint-mcp = leanblueprint_mcp.server:main
+leanblueprint-mcp = leanblueprint_mcp.server:cli

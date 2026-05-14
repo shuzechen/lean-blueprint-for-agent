@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-leanblueprint-mcp = "leanblueprint_mcp.server:main"
+leanblueprint-mcp = "leanblueprint_mcp.server:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

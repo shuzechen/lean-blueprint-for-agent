@@ -33,6 +33,17 @@ To exercise the CLI end-to-end you need an external Lean project (a directory co
 - `leanblueprint serve` — serves the compiled `blueprint/web` on the first free port in 8000–8009
 - Pass `--debug` to surface Python tracebacks instead of the friendly error path in `safe_cli`/`handle_exception`.
 
+## Test fixture: `Noisy_Channel_Coding/`
+
+`Noisy_Channel_Coding/` at the repo root is the canonical end-to-end test target for the agent → MCP → blueprint pipeline. It is a real Lean 4 project (`lakefile.lean`, `lean-toolchain`, `lake-manifest.json`) formalizing Shannon's noisy-channel coding theorem, structured into:
+
+- `Definitions/Def_*.lean` (6 files) — `Def_DMC`, `Def_Entropy`, `Def_MutualInformation`, `Def_ChannelCapacity`, `Def_Code`, `Def_AchievableRate`.
+- `Theorems/Thm_*.lean` (12 files) — the Cover & Thomas decomposition (achievability + converse + joint AEP helpers + Fano).
+- `Sketches/sketch_noisy_channel_coding.lean` — top-level glue tying achievability and converse.
+- `Noisy_Channel_Coding/CLAUDE.md` — agent-authored math notes, decomposition tree, design decisions.
+
+**Assumption for any blueprint test:** the project is already on disk and `lake build` succeeds (with `sorry` warnings). The MCP work in this repo never compiles Lean — it only renders blueprints. When you need a sample input for the MCP, derive it from these files: each `Def_*.lean` / `Thm_*.lean` corresponds to one blueprint item, and the agent passes the file path (e.g. `"Definitions/Def_DMC.lean"`) in `lean.file`; the MCP reads it and embeds the imports + body in the rendered modal.
+
 ## Architecture notes worth knowing before editing
 
 ### Dependency graph state lives on plasTeX node `userdata`

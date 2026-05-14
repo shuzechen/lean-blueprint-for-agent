@@ -5,3 +5,37 @@ a.github_link {
   color: inherit;
 }
 
+.lean_source_block {
+  margin: 0.5em 0;
+}
+
+.lean_source_block .lean_source_name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  font-size: 0.9em;
+  margin-bottom: 0.25em;
+}
+
+pre.lean_source {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.4;
+  white-space: pre;
+}
+
+pre.lean_source code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: transparent;
+  padding: 0;
+}
+
+.lean_source_missing {
+  color: #6e7781;
+  font-style: italic;
+  margin: 0.25em 0 0.75em 0;
+}
+

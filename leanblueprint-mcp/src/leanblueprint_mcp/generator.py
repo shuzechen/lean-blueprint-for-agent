@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -46,6 +47,90 @@ def _escape_latex(s: str) -> str:
     return s
 
 
+def _lean_key_for_item(item: BlueprintItem) -> str:
+    """File basename without .lean — used as the \\lean{...} macro argument and
+    as the key under which the sidecar exposes (imports, body) for the modal."""
+    if item.lean is None:
+        return ""
+    name = Path(item.lean.file).name
+    if name.endswith(".lean"):
+        name = name[:-5]
+    return name
+
+
+def _split_lean_source(file_path: Path) -> tuple[list[str], str]:
+    """Read a .lean file and split it into (imports, body).
+
+    `imports` is the list of module names from leading `import X` lines (in
+    order). `body` is everything after the last import line, with any leading
+    blank lines stripped so the modal renders compactly. If the file has no
+    imports, `body` is the entire file content.
+    """
+    text = file_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    imports: list[str] = []
+    body_start = 0
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("import "):
+            imports.append(stripped[len("import "):].strip())
+            body_start = idx + 1
+        elif stripped == "":
+            # Allow blank lines between imports
+            if imports:
+                body_start = idx + 1
+            continue
+        else:
+            break
+
+    body_lines = lines[body_start:]
+    # Strip leading blank lines from body for compactness
+    while body_lines and body_lines[0].strip() == "":
+        body_lines.pop(0)
+    return imports, "\n".join(body_lines)
+
+
+def write_lean_sources_sidecar(project_dir: Path, inp: BlueprintInput) -> dict[str, int]:
+    """Walk every item in `inp.chapters` whose `lean.file` is set, read that
+    file from `project_dir`, and write a JSON sidecar at
+    `<project_dir>/blueprint/lean_sources.json` mapping the file basename
+    (without `.lean`) to `{imports, body}` for the leanblueprint plasTeX
+    plugin to consume.
+
+    Returns a small counters dict for the caller to report in the tool result.
+    """
+    sidecar: dict[str, dict] = {}
+    counters = {"included": 0, "missing": 0}
+
+    for ch in inp.chapters:
+        for item in ch.items:
+            if item.lean is None:
+                continue
+            key = _lean_key_for_item(item)
+            if not key:
+                continue
+            file_path = (project_dir / item.lean.file).resolve()
+            if not file_path.exists():
+                counters["missing"] += 1
+                continue
+            try:
+                imports, body = _split_lean_source(file_path)
+            except OSError:
+                counters["missing"] += 1
+                continue
+            sidecar[key] = {"imports": imports, "body": body}
+            counters["included"] += 1
+
+    sidecar_path = project_dir / "blueprint" / "lean_sources.json"
+    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    sidecar_path.write_text(
+        json.dumps(sidecar, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return counters
+
+
 def generate_content(inp: BlueprintInput) -> str:
     id_to_type: dict[str, ItemType] = {}
     for ch in inp.chapters:
@@ -73,8 +158,8 @@ def generate_content(inp: BlueprintInput) -> str:
                 labels = ", ".join(resolve_label(d) for d in item.uses)
                 lines.append(f"  \\uses{{{labels}}}")
 
-            if item.lean_decls:
-                lines.append(f"  \\lean{{{', '.join(item.lean_decls)}}}")
+            if item.lean is not None:
+                lines.append(f"  \\lean{{{_lean_key_for_item(item)}}}")
 
             status_cmds = {
                 "stated": "  \\leanok",
@@ -104,7 +189,6 @@ def generate_content(inp: BlueprintInput) -> str:
 def generate_web_tex(inp: BlueprintInput) -> str:
     home = inp.home or "https://example.com"
     github = inp.github or "https://github.com/user/repo"
-    dochome = inp.dochome or "https://leanprover-community.github.io/mathlib4_docs"
     author_line = f"\\author{{{_escape_latex(inp.author)}}}" if inp.author else ""
 
     return f"""% Web version of the blueprint
@@ -119,7 +203,6 @@ def generate_web_tex(inp: BlueprintInput) -> str:
 
 \\home{{{home}}}
 \\github{{{github}}}
-\\dochome{{{dochome}}}
 
 \\title{{{_escape_latex(inp.title)}}}
 {author_line}
