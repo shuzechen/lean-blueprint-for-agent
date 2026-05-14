@@ -7,10 +7,10 @@ import os
 import sys
 from pathlib import Path
 
-from mcp.server import Server, NotificationOptions
-from mcp.server.models import InitializationCapabilities
-from mcp.server.stdio import stdio_server
+from mcp.server import Server
+from mcp.server.models import InitializationOptions, ServerCapabilities
 import mcp.types as types
+import anyio
 
 from .schema import BlueprintInput
 from .generator import scaffold, generate_content
@@ -220,13 +220,55 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
 
 async def main() -> None:
-    async with stdio_server() as (read_stream, write_stream):
+    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+
+    stdin_buf = sys.stdin.buffer
+
+    async def stdin_reader():
+        try:
+            async with read_stream_writer:
+                while True:
+                    header = b""
+                    while b"\r\n\r\n" not in header:
+                        b = await anyio.to_thread.run_sync(stdin_buf.read, 1)
+                        if not b:
+                            return
+                        header += b
+                    content_length = int(header.split(b"Content-Length: ")[1].split(b"\r\n")[0])
+                    body = await anyio.to_thread.run_sync(stdin_buf.read, content_length)
+                    try:
+                        message = types.JSONRPCMessage.model_validate_json(body)
+                    except Exception as exc:
+                        await read_stream_writer.send(exc)
+                        continue
+                    from mcp.server.stdio import SessionMessage
+                    await read_stream_writer.send(SessionMessage(message))
+        except anyio.ClosedResourceError:
+            pass
+
+    async def stdout_writer():
+        try:
+            async with write_stream_reader:
+                async for session_message in write_stream_reader:
+                    json_str = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
+                    payload = json_str.encode("utf-8")
+                    header = f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8")
+                    sys.stdout.buffer.write(header + payload)
+                    sys.stdout.buffer.flush()
+        except anyio.ClosedResourceError:
+            pass
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(stdin_reader)
+        tg.start_soon(stdout_writer)
         await server.run(
             read_stream,
             write_stream,
-            InitializationCapabilities(
-                sampling={},
-                experimental={},
+            InitializationOptions(
+                server_name="leanblueprint",
+                server_version="0.1.0",
+                capabilities=ServerCapabilities(),
             ),
         )
 

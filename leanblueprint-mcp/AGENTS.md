@@ -13,6 +13,18 @@ Call `leanblueprint_render` when the user:
 - Wants to create a **blueprint** for a Lean formalization project
 - Asks to see how theorems relate to each other in a **dependency graph**
 - Says "show me the dependency graph", "create a blueprint", "visualize theorems"
+- Has existing Lean 4 `.lean` files and wants a **dependency graph of their project**
+
+## When to set `generate_lean: true` vs `false`
+
+| Scenario | `generate_lean` | `lean.decl` |
+|----------|----------------|-------------|
+| User describes theorems, wants **new** Lean code | `true` | Write the full Lean 4 declaration |
+| User provides **existing** `.lean` files, wants HTML | `false` | **Do not fill** — use `lean_decls` only |
+| User asks to **modify** existing proofs | `true` | Write the updated Lean declaration |
+| User just wants dependency visualization (no code) | `false` | **Do not fill** |
+
+**Key rule**: If the Lean code already exists on disk, do NOT recreate it. Set `generate_lean: false`, read the existing files, and only populate `lean_decls` with the qualified declaration names to map them to the blueprint.
 
 ## How to translate user descriptions into the JSON
 
