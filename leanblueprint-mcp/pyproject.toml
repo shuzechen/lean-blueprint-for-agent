@@ -4,10 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leanblueprint-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for rendering Lean 4 blueprint dependency graphs from structured theorem data."
 license = {text = "MIT"}
+readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+    {name = "Shuze Chen"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["lean4", "blueprint", "mcp", "theorem", "dependency-graph", "formalization"]
 dependencies = [
     "mcp>=1.0.0",
     "pydantic>=2.0",
@@ -16,8 +32,15 @@ dependencies = [
     "leanblueprint>=0.0.20",
 ]
 
+[project.urls]
+Homepage = "https://github.com/shuzechen/lean-blueprint-for-agent"
+Repository = "https://github.com/shuzechen/lean-blueprint-for-agent"
+
 [project.scripts]
 leanblueprint-mcp = "leanblueprint_mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+leanblueprint_mcp = ["AGENTS.md"]

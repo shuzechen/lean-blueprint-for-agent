@@ -220,8 +220,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
 
 async def main() -> None:
-    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
-    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+    # Buffer of 256 prevents deadlock between stdin_reader and server.run()
+    read_stream_writer, read_stream = anyio.create_memory_object_stream(256)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream(256)
 
     stdin_buf = sys.stdin.buffer
 
@@ -231,10 +232,10 @@ async def main() -> None:
                 while True:
                     header = b""
                     while b"\r\n\r\n" not in header:
-                        b = await anyio.to_thread.run_sync(stdin_buf.read, 1)
-                        if not b:
+                        chunk = await anyio.to_thread.run_sync(stdin_buf.read, 1)
+                        if not chunk:
                             return
-                        header += b
+                        header += chunk
                     content_length = int(header.split(b"Content-Length: ")[1].split(b"\r\n")[0])
                     body = await anyio.to_thread.run_sync(stdin_buf.read, content_length)
                     try:
@@ -246,6 +247,9 @@ async def main() -> None:
                     await read_stream_writer.send(SessionMessage(message))
         except anyio.ClosedResourceError:
             pass
+        except Exception:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
 
     async def stdout_writer():
         try:
@@ -258,6 +262,9 @@ async def main() -> None:
                     sys.stdout.buffer.flush()
         except anyio.ClosedResourceError:
             pass
+        except Exception:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
 
     async with anyio.create_task_group() as tg:
         tg.start_soon(stdin_reader)
@@ -267,7 +274,7 @@ async def main() -> None:
             write_stream,
             InitializationOptions(
                 server_name="leanblueprint",
-                server_version="0.1.0",
+                server_version="0.1.1",
                 capabilities=ServerCapabilities(),
             ),
         )
