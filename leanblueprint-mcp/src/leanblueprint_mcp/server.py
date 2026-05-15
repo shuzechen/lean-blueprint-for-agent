@@ -220,24 +220,63 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
 
 async def main() -> None:
-    # Buffer of 256 prevents deadlock between stdin_reader and server.run()
     read_stream_writer, read_stream = anyio.create_memory_object_stream(256)
     write_stream, write_stream_reader = anyio.create_memory_object_stream(256)
 
     stdin_buf = sys.stdin.buffer
 
+    # Auto-detect protocol: Content-Length framing vs line-based JSON
+    protocol = {"mode": "detect"}  # "content-length" | "line"
+
     async def stdin_reader():
         try:
             async with read_stream_writer:
                 while True:
-                    header = b""
-                    while b"\r\n\r\n" not in header:
-                        chunk = await anyio.to_thread.run_sync(stdin_buf.read, 1)
-                        if not chunk:
+                    # Peek first byte to detect or switch protocol
+                    if protocol["mode"] == "detect":
+                        first = await anyio.to_thread.run_sync(stdin_buf.read, 1)
+                        if not first:
                             return
-                        header += chunk
-                    content_length = int(header.split(b"Content-Length: ")[1].split(b"\r\n")[0])
-                    body = await anyio.to_thread.run_sync(stdin_buf.read, content_length)
+                        if first == b"{":
+                            protocol["mode"] = "line"
+                            # Put the byte back by prepending it
+                            body = first + await anyio.to_thread.run_sync(stdin_buf.readline)
+                        else:
+                            protocol["mode"] = "content-length"
+                            header = first
+                            while b"\r\n\r\n" not in header:
+                                chunk = await anyio.to_thread.run_sync(stdin_buf.read, 1)
+                                if not chunk:
+                                    return
+                                header += chunk
+                            content_length = int(header.split(b"Content-Length: ")[1].split(b"\r\n")[0])
+                            body = await anyio.to_thread.run_sync(stdin_buf.read, content_length)
+                        try:
+                            message = types.JSONRPCMessage.model_validate_json(body)
+                        except Exception as exc:
+                            await read_stream_writer.send(exc)
+                            continue
+                        from mcp.server.stdio import SessionMessage
+                        await read_stream_writer.send(SessionMessage(message))
+                        continue
+
+                    if protocol["mode"] == "line":
+                        body = await anyio.to_thread.run_sync(stdin_buf.readline)
+                        if not body:
+                            return
+                        body = body.rstrip(b"\r\n")
+                        if not body:
+                            continue
+                    else:
+                        header = b""
+                        while b"\r\n\r\n" not in header:
+                            chunk = await anyio.to_thread.run_sync(stdin_buf.read, 1)
+                            if not chunk:
+                                return
+                            header += chunk
+                        content_length = int(header.split(b"Content-Length: ")[1].split(b"\r\n")[0])
+                        body = await anyio.to_thread.run_sync(stdin_buf.read, content_length)
+
                     try:
                         message = types.JSONRPCMessage.model_validate_json(body)
                     except Exception as exc:
@@ -257,8 +296,11 @@ async def main() -> None:
                 async for session_message in write_stream_reader:
                     json_str = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
                     payload = json_str.encode("utf-8")
-                    header = f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8")
-                    sys.stdout.buffer.write(header + payload)
+                    if protocol["mode"] == "line":
+                        sys.stdout.buffer.write(payload + b"\n")
+                    else:
+                        header = f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8")
+                        sys.stdout.buffer.write(header + payload)
                     sys.stdout.buffer.flush()
         except anyio.ClosedResourceError:
             pass
@@ -274,7 +316,7 @@ async def main() -> None:
             write_stream,
             InitializationOptions(
                 server_name="leanblueprint",
-                server_version="0.1.1",
+                server_version="0.1.3",
                 capabilities=ServerCapabilities(),
             ),
         )

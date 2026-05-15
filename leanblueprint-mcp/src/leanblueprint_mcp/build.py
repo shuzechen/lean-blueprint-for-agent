@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def check_dependencies() -> list[str]:
     errors: list[str] = []
 
     try:
-        subprocess.run(["python", "--version"], capture_output=True, timeout=5)
+        subprocess.run([sys.executable, "--version"], capture_output=True, timeout=5)
     except Exception:
         errors.append("Python 3.7+ is required. Install from https://python.org")
         return errors
@@ -32,7 +33,7 @@ def check_dependencies() -> list[str]:
     ]:
         try:
             subprocess.run(
-                ["python", "-c", f"import {mod}"],
+                [sys.executable, "-c", f"import {mod}"],
                 capture_output=True,
                 timeout=10,
                 check=True,
